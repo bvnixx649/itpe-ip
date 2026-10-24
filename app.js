@@ -1,6 +1,20 @@
 (function(){
 'use strict';
-const QS = window.QS;
+const SETS = {
+  a:{data:window.QS, img:'img', sfx:'', tab:'ชุดติว', title:'ITPE IP<br>ทำข้อสอบ แล้วเรียนจากเฉลย', desc:'ข้อสอบ IT Passport 100 ข้อจากชุดติว ตอบแล้วเห็นทันทีว่าถูกหรือผิด พร้อมวิธีคิดทีละขั้นและเหตุผลว่าทำไมตัวเลือกอื่นผิด'},
+  y24:{data:window.QS24, img:'img24', sfx:'-24', tab:'ข้อสอบจริง เม.ย. 2024', title:'ข้อสอบจริง<br>ITPEC เมษายน 2024', desc:'ข้อสอบ IT Passport รอบที่ 29 ครบ 100 ข้อ เฉลยตรงกับเฉลยทางการของ ITPEC โจทย์ภาษาไทยจากตำรา กดปุ่ม EN เพื่อดูโจทย์ภาษาอังกฤษแบบวันสอบ'}
+};
+let SET = 'a', QS = SETS.a.data, byN = {};
+const K = k => k + SETS[SET].sfx;
+const H = p => '#/' + (SET === 'a' ? '' : SET + '/') + p;
+function useSet(id){
+  SET = SETS[id] && SETS[id].data ? id : 'a';
+  QS = SETS[SET].data; byN = {}; QS.forEach(q => byN[q.n] = q);
+  stats = load(K('ip-stats'), {});
+}
+let lang = 'th';
+const qText = q => lang === 'en' && q.en ? q.en.q : q.q;
+const optsOf = q => lang === 'en' && q.en ? q.en.o : q.o;
 const L = 'abcd';
 const SECT = {
   S:{name:'Strategy',th:'กลยุทธ์',topics:['Corporate and Legal Affairs','Business Strategy','System Strategy']},
@@ -9,15 +23,14 @@ const SECT = {
 };
 const SKIPIMG = {p34_0:1};
 const app = document.getElementById('app');
-const byN = {}; QS.forEach(q => byN[q.n] = q);
 
 /* ---------- storage ---------- */
 function load(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
-let stats = load('ip-stats', {});           // n -> {t:tries, c:last correct, g:ever correct}
+let stats = {};           // n -> {t:tries, c:last correct, g:ever correct}
 function record(n, ok){
   const s = stats[n] || {t:0,c:false,g:false};
-  s.t++; s.c = ok; s.g = s.g || ok; stats[n] = s; save('ip-stats', stats);
+  s.t++; s.c = ok; s.g = s.g || ok; stats[n] = s; save(K('ip-stats'), stats);
 }
 const wrongList = () => QS.filter(q => stats[q.n] && !stats[q.n].c).map(q => q.n);
 
@@ -49,13 +62,13 @@ function toggleTheme(){
 }
 function shuffle(a){ a = a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function stemHTML(q){
-  return q.q.map(l => {
+  return qText(q).map(l => {
     const sub = /^(\(\d+\)|\([ivx]+\)|[A-D][:\s]|•|To:|Cc:|Bcc:|\[)/.test(l);
     return `<p class="${sub ? 'sub' : ''}">${esc(l.replace(/^([A-D])\s{2,}/,'$1: '))}</p>`;
-  }).join('') + q.img.filter(i => !SKIPIMG[i]).map(i => `<div class="fig"><img src="img/${i}.png" alt="รูปประกอบโจทย์ข้อ ${q.n}" loading="lazy"></div>`).join('');
+   }).join('') + (q.code ? `<pre class="code">${esc(q.code)}</pre>` : '') + q.img.filter(i => !SKIPIMG[i]).map(i => `<div class="fig"><img src="${SETS[SET].img}/${i}.png" alt="รูปประกอบโจทย์ข้อ ${q.n}" loading="lazy"></div>`).join('');
 }
 function metaHTML(q){
-  return `<div class="qmeta"><span class="dot" style="background:var(--${q.s})"></span><span class="qno">ข้อ ${q.n}</span><span>${esc(q.c)}</span></div>`;
+  return `<div class="qmeta"><span class="dot" style="background:var(--${q.s})"></span><span class="qno">ข้อ ${q.n}</span><span>${esc(q.c)}</span>${q.en ? `<button class="lang" data-lang>${lang === 'en' ? 'ไทย' : 'EN'}</button>` : ''}</div>`;
 }
 function bindZoom(root){
   root.querySelectorAll('.fig img').forEach(img => img.onclick = () => {
@@ -74,48 +87,50 @@ function home(){
   const answered = QS.filter(q => stats[q.n]).length;
   const right = QS.filter(q => stats[q.n] && stats[q.n].c).length;
   const wl = wrongList();
-  const ex = load('ip-exam', null);
-  const last = load('ip-last', null);
+  const ex = load(K('ip-exam'), null);
+  const last = load(K('ip-last'), null);
   const secCard = k => {
     const qs = QS.filter(q => q.s === k), g = qs.filter(q => stats[q.n] && stats[q.n].c).length;
-    return `<button class="card sx" data-go="#/p/${k}">${ring(g, qs.length, `var(--${k})`)}
+    return `<button class="card sx" data-go="${H('p/'+k)}">${ring(g, qs.length, `var(--${k})`)}
       <div><h3>${SECT[k].name} <span style="color:var(--mute);font-weight:500">${SECT[k].th}</span></h3>
       <p>${qs.length} ข้อ ตอบถูกแล้ว ${g}</p>
-      <div class="topics">${SECT[k].topics.map(t => `<span>${t} ${qs.filter(q=>q.c===t).length}</span>`).join('')}</div></div>
+      <div class="topics">${[...new Set(qs.map(q => q.c))].map(t => `<span>${t} ${qs.filter(q=>q.c===t).length}</span>`).join('')}</div></div>
       <span class="arr">${ico.arr}</span></button>`;
   };
   app.innerHTML = `
   <header class="hero"><div class="wrap">
     <div class="topbar"><button class="iconbtn" id="theme" aria-label="สลับธีม">${isDark() ? ico.sun : ico.moon}</button></div>
-    <h1>ITPE IP<br>ทำข้อสอบ แล้วเรียนจากเฉลย</h1>
-    <p>ข้อสอบ IT Passport 100 ข้อ ตอบแล้วเห็นทันทีว่าถูกหรือผิด พร้อมวิธีคิดทีละขั้นและเหตุผลว่าทำไมตัวเลือกอื่นผิด</p>
-    <div class="stats"><div><b>${answered}<span style="font-size:16px;opacity:.7">/100</span></b><span>ข้อที่เคยทำ</span></div><div><b>${right}</b><span>ตอบถูกล่าสุด</span></div><div><b>${wl.length}</b><span>ข้อที่ต้องทวน</span></div></div>
-    <svg viewBox="0 0 200 200" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="30" y="30" width="140" height="30" rx="10"/><rect x="30" y="74" width="140" height="30" rx="10"/><rect x="30" y="118" width="140" height="30" rx="10" fill="rgba(255,255,255,.25)"/><rect x="30" y="162" width="140" height="30" rx="10"/><path d="M140 126l8 8 14-16"/></svg>
+    <div class="seg">${Object.keys(SETS).filter(id => SETS[id].data).map(id => `<button class="${id === SET ? 'on' : ''}" data-set="${id}">${SETS[id].tab}</button>`).join('')}</div>
+    <h1>${SETS[SET].title}</h1>
+    <p>${SETS[SET].desc}</p>
+    <div class="stats"><div><b>${answered}<span style="font-size:16px;opacity:.7">/${QS.length}</span></b><span>ข้อที่เคยทำ</span></div><div><b>${right}</b><span>ตอบถูกล่าสุด</span></div><div><b>${wl.length}</b><span>ข้อที่ต้องทวน</span></div></div>
+    <svg class="deco" viewBox="0 0 200 200" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><rect x="30" y="30" width="140" height="30" rx="10"/><rect x="30" y="74" width="140" height="30" rx="10"/><rect x="30" y="118" width="140" height="30" rx="10" fill="rgba(255,255,255,.25)"/><rect x="30" y="162" width="140" height="30" rx="10"/><path d="M140 126l8 8 14-16"/></svg>
   </div></header>
   <div class="wrap lift">
-    ${last && last.mode && last.i > 0 && last.i < (last.list||[]).length ? `<button class="card go" data-go="#/p/${last.mode}" style="margin-bottom:12px"><span class="gi">${ico.play}</span><div><h3>ทำต่อจากเดิม</h3><p>${modeName(last.mode)} ข้อที่ ${last.i+1} จาก ${last.list.length}</p></div><span class="arr">${ico.arr}</span></button>` : ''}
-    <button class="card go" data-go="#/p/all"><span class="gi">${ico.play}</span><div><h3>ฝึกเรียงทั้ง 100 ข้อ</h3><p>ตอบทีละข้อ เห็นเฉลยและวิธีคิดทันที</p></div><span class="arr">${ico.arr}</span></button>
+    ${last && last.mode && last.i > 0 && last.i < (last.list||[]).length ? `<button class="card go" data-go="${H('p/'+last.mode)}" style="margin-bottom:12px"><span class="gi">${ico.play}</span><div><h3>ทำต่อจากเดิม</h3><p>${modeName(last.mode)} ข้อที่ ${last.i+1} จาก ${last.list.length}</p></div><span class="arr">${ico.arr}</span></button>` : ''}
+    <button class="card go" data-go="${H('p/all')}"><span class="gi">${ico.play}</span><div><h3>ฝึกเรียงทั้ง ${QS.length} ข้อ</h3><p>ตอบทีละข้อ เห็นเฉลยและวิธีคิดทันที</p></div><span class="arr">${ico.arr}</span></button>
     <div class="row2">
-      <button class="card go" data-go="#/x"><span class="gi" style="background:var(--T-soft);color:var(--T)">${ico.clock}</span><div><h3>${ex && !ex.done ? 'สอบต่อ' : 'สอบเสมือนจริง'}</h3><p>${ex && !ex.done ? `ตอบไปแล้ว ${Object.keys(ex.ans).length} ข้อ` : '100 ข้อ 120 นาที เฉลยตอนจบ'}</p></div></button>
-      <button class="card go" data-go="#/p/rand"><span class="gi" style="background:var(--M-soft);color:var(--M)">${ico.shuffle}</span><div><h3>สุ่ม 20 ข้อ</h3><p>รอบสั้น ทำจบในสิบนาที</p></div></button>
+      <button class="card go" data-go="${H('x')}"><span class="gi" style="background:var(--T-soft);color:var(--T)">${ico.clock}</span><div><h3>${ex && !ex.done ? 'สอบต่อ' : 'สอบเสมือนจริง'}</h3><p>${ex && !ex.done ? `ตอบไปแล้ว ${Object.keys(ex.ans).length} ข้อ` : '100 ข้อ 120 นาที เฉลยตอนจบ'}</p></div></button>
+      <button class="card go" data-go="${H('p/rand')}"><span class="gi" style="background:var(--M-soft);color:var(--M)">${ico.shuffle}</span><div><h3>สุ่ม 20 ข้อ</h3><p>รอบสั้น ทำจบในสิบนาที</p></div></button>
     </div>
-    ${wl.length ? `<button class="card go" data-go="#/p/wrong" style="margin-top:12px"><span class="gi" style="background:var(--bad-soft);color:var(--bad)">${ico.redo}</span><div><h3>ทวนข้อที่ตอบผิด</h3><p>${wl.length} ข้อ ตอบถูกแล้วจะออกจากรายการนี้</p></div><span class="arr">${ico.arr}</span></button>` : ''}
+    ${wl.length ? `<button class="card go" data-go="${H('p/wrong')}" style="margin-top:12px"><span class="gi" style="background:var(--bad-soft);color:var(--bad)">${ico.redo}</span><div><h3>ทวนข้อที่ตอบผิด</h3><p>${wl.length} ข้อ ตอบถูกแล้วจะออกจากรายการนี้</p></div><span class="arr">${ico.arr}</span></button>` : ''}
     <h2 class="sec">ฝึกทีละหมวด</h2>
     <div class="secs">${secCard('S')}${secCard('M')}${secCard('T')}</div>
     <p class="foot">ข้อสอบจริงมี 100 ข้อ 120 นาที ปรนัย 4 ตัวเลือก เกณฑ์ผ่านของ ITPEC คือคะแนนรวม 60% และทุกหมวดต้องได้อย่างน้อย 30% (ผู้จัดสอบในไทยบางรอบใช้ 55% ตรวจประกาศรอบสอบของตัวเองอีกที) ความคืบหน้าเก็บไว้ในเครื่องนี้เท่านั้น <button id="reset">ล้างความคืบหน้า</button></p>
   </div>`;
   app.querySelectorAll('[data-go]').forEach(b => b.onclick = () => location.hash = b.dataset.go);
   $('#theme').onclick = toggleTheme;
-  $('#reset').onclick = () => { if(confirm('ล้างประวัติการทำข้อสอบทั้งหมด?')){ stats = {}; save('ip-stats', {}); save('ip-last', null); save('ip-exam', null); home(); } };
+  app.querySelectorAll('[data-set]').forEach(b => b.onclick = () => { if(b.dataset.set !== SET){ location.hash = b.dataset.set === 'a' ? '#/' : '#/' + b.dataset.set + '/'; } });
+  $('#reset').onclick = () => { if(confirm('ล้างประวัติการทำข้อสอบทั้งหมด?')){ stats = {}; save(K('ip-stats'), {}); save(K('ip-last'), null); save(K('ip-exam'), null); home(); } };
 }
 function modeName(m){
-  return m === 'all' ? 'ฝึกเรียง 100 ข้อ' : m === 'rand' ? 'สุ่ม 20 ข้อ' : m === 'wrong' ? 'ทวนข้อที่ผิด' : SECT[m] ? `หมวด ${SECT[m].name}` : '';
+  return m === 'all' ? `ฝึกเรียง ${QS.length} ข้อ` : m === 'rand' ? 'สุ่ม 20 ข้อ' : m === 'wrong' ? 'ทวนข้อที่ผิด' : SECT[m] ? `หมวด ${SECT[m].name}` : '';
 }
 
 /* ---------- practice ---------- */
 let P = null;
 function practice(mode){
-  let last = load('ip-last', null);
+  let last = load(K('ip-last'), null);
   if(last && last.mode === mode && last.i < last.list.length && last.list.every(n => byN[n])){
     P = {mode, list:last.list, i:last.i, res:last.res || {}};
   } else {
@@ -129,7 +144,7 @@ function practice(mode){
   }
   persistP(); showQ();
 }
-function persistP(){ save('ip-last', {mode:P.mode, list:P.list, i:P.i, res:P.res}); }
+function persistP(){ save(K('ip-last'), {mode:P.mode, list:P.list, i:P.i, res:P.res}); }
 function topbar(extra){
   return `<div class="qtop"><div class="wrap"><button class="iconbtn" id="close" aria-label="กลับหน้าแรก">${ico.x}</button>
   <div class="bar"><i style="width:${extra.pct}%"></i></div>${extra.right}</div></div>`;
@@ -139,9 +154,9 @@ function showQ(){
   const q = byN[P.list[P.i]];
   app.innerHTML = topbar({pct: P.i/P.list.length*100, right:`<span class="count">${P.i+1}/${P.list.length}</span>`}) + `
   <div class="wrap qbody fade">${metaHTML(q)}<div class="stem">${stemHTML(q)}</div>
-  <div class="opts">${q.o.map((o,i) => `<button class="opt" data-i="${i}"><span class="k">${L[i]}</span><span class="t">${esc(o)}</span></button>`).join('')}</div></div>
+  <div class="opts">${optsOf(q).map((o,i) => `<button class="opt" data-i="${i}"><span class="k">${L[i]}</span><span class="t">${esc(o)}</span></button>`).join('')}</div></div>
   `;
-  $('#close').onclick = () => location.hash = '#/';
+  $('#close').onclick = () => location.hash = H('');
   bindZoom(app);
   app.querySelectorAll('.opt').forEach(b => b.onclick = () => answer(q, +b.dataset.i));
   scrollTo(0, 0);
@@ -173,7 +188,7 @@ function showFeedback(q, pick, label, next){
   const ok = pick === q.a;
   const fb = document.createElement('section');
   fb.className = 'fb ' + (ok ? 'good' : 'bad');
-  fb.innerHTML = `<div class="verdict"><span class="ic">${ok ? ico.ok : ico.no}</span><div><h3>${ok ? 'ถูกต้อง' : 'ยังไม่ใช่'}</h3><p>คำตอบคือ ${L[q.a]}) ${esc(q.o[q.a])}</p></div></div>${explainHTML(q, pick)}`;
+  fb.innerHTML = `<div class="verdict"><span class="ic">${ok ? ico.ok : ico.no}</span><div><h3>${ok ? 'ถูกต้อง' : 'ยังไม่ใช่'}</h3><p>คำตอบคือ ${L[q.a]}) ${esc(optsOf(q)[q.a])}</p></div></div>${explainHTML(q, pick)}`;
   $('.qbody').appendChild(fb);
   const dock = document.createElement('div');
   dock.className = 'dock ' + (ok ? 'good' : 'bad');
@@ -188,14 +203,14 @@ function showFeedback(q, pick, label, next){
 }
 function practiceDone(){
   const ns = P.list, r = ns.filter(n => P.res[n]).length;
-  save('ip-last', null);
+  save(K('ip-last'), null);
   app.innerHTML = `<div class="wrap fade"><div class="score"><div class="big-n">${r}<small>/${ns.length}</small></div>
     <h2>${r === ns.length ? 'ถูกหมดทุกข้อ' : r/ns.length >= .6 ? 'ผ่านเกณฑ์ 60%' : 'ยังต่ำกว่า 60%'}</h2><p>${modeName(P.mode)}</p></div>
     ${resultList(ns, n => P.res[n])}
     <div style="display:grid;gap:10px;margin-bottom:40px">${ns.some(n => !P.res[n]) ? `<button class="big" id="again">ทวนข้อที่ผิดรอบนี้</button>` : ''}<button class="big ghost" id="home">กลับหน้าแรก</button></div></div>`;
   bindList();
-  $('#home').onclick = () => location.hash = '#/';
-  const a = $('#again'); if(a) a.onclick = () => { P = {mode:'wrong', list:ns.filter(n => !P.res[n]), i:0, res:{}}; persistP(); location.hash = '#/p/wrong'; };
+  $('#home').onclick = () => location.hash = H('');
+  const a = $('#again'); if(a) a.onclick = () => { P = {mode:'wrong', list:ns.filter(n => !P.res[n]), i:0, res:{}}; persistP(); location.hash = H('p/wrong'); };
   scrollTo(0, 0);
 }
 function resultList(ns, isRight){
@@ -208,7 +223,7 @@ function review(n, pick){
   const q = byN[n], back = location.hash;
   const prev = app.innerHTML, y = scrollY;
   app.innerHTML = topbar({pct:100, right:''}) + `<div class="wrap qbody fade">${metaHTML(q)}<div class="stem">${stemHTML(q)}</div>
-    <div class="opts">${q.o.map((o,i) => `<button class="opt ${i === q.a ? 'ok' : i === pick ? 'no' : 'dim'}" disabled><span class="k">${L[i]}</span><span class="t">${esc(o)}</span></button>`).join('')}</div>
+    <div class="opts">${optsOf(q).map((o,i) => `<button class="opt ${i === q.a ? 'ok' : i === pick ? 'no' : 'dim'}" disabled><span class="k">${L[i]}</span><span class="t">${esc(o)}</span></button>`).join('')}</div>
     <div class="card" style="padding:4px 20px 20px;margin-top:20px">${explainHTML(q, pick === undefined ? null : pick)}</div>
     <button class="big ghost" id="bk" style="margin-top:20px">กลับไปที่สรุป</button></div>`;
   bindZoom(app); scrollTo(0, 0);
@@ -220,9 +235,9 @@ let bindAfterRestore = () => {};
 /* ---------- exam ---------- */
 const EXAM_MIN = 120;
 function exam(){
-  let ex = load('ip-exam', null);
+  let ex = load(K('ip-exam'), null);
   if(!ex || ex.done){
-    if(ex && ex.done && location.hash === '#/x/res') return examResult(ex);
+    if(ex && ex.done && location.hash === H('x/res')) return examResult(ex);
     return examIntro(ex);
   }
   E = ex; showE();
@@ -236,31 +251,31 @@ function examIntro(prev){
     <p style="margin-top:10px">เวลาเฉลี่ย 72 วินาทีต่อข้อ ปิดหน้านี้ไปก่อนได้ เวลาจะยังเดินต่อ</p>
     <div style="display:grid;gap:10px;margin-top:28px"><button class="big" id="start">เริ่มจับเวลา</button>${prev && prev.done ? `<button class="big ghost" id="last">ดูผลสอบครั้งก่อน</button>` : ''}</div>
   </div></div>`;
-  $('#close').onclick = () => location.hash = '#/';
-  $('#start').onclick = () => { E = {start:Date.now(), ans:{}, i:0, done:false}; save('ip-exam', E); showE(); };
-  const l = $('#last'); if(l) l.onclick = () => { location.hash = '#/x/res'; };
+  $('#close').onclick = () => location.hash = H('');
+  $('#start').onclick = () => { E = {start:Date.now(), ans:{}, i:0, done:false}; save(K('ip-exam'), E); showE(); };
+  const l = $('#last'); if(l) l.onclick = () => { location.hash = H('x/res'); };
 }
 function remain(){ return Math.max(0, E.start + EXAM_MIN*60000 - Date.now()); }
 function fmt(ms){ const s = Math.ceil(ms/1000), h = s/3600|0, m = (s%3600)/60|0, ss = s%60; return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; }
 function showE(){
   const q = QS[E.i], pick = E.ans[q.n];
   const done = Object.keys(E.ans).length;
-  app.innerHTML = topbar({pct: done, right:`<span class="timer" id="tm">${fmt(remain())}</span><button class="iconbtn" id="nav" aria-label="ดูทุกข้อ">${ico.grid}</button>`}) + `
+  app.innerHTML = topbar({pct: done/QS.length*100, right:`<span class="timer" id="tm">${fmt(remain())}</span><button class="iconbtn" id="nav" aria-label="ดูทุกข้อ">${ico.grid}</button>`}) + `
   <div class="wrap qbody fade" style="padding-bottom:140px">${metaHTML(q)}<div class="stem">${stemHTML(q)}</div>
-  <div class="opts">${q.o.map((o,i) => `<button class="opt ${pick === i ? 'pick' : ''}" data-i="${i}"><span class="k">${L[i]}</span><span class="t">${esc(o)}</span></button>`).join('')}</div></div>
-  <div class="dock"><div class="wrap"><button class="big ghost" id="prev" ${E.i === 0 ? 'disabled' : ''} style="flex:1">ก่อนหน้า</button><button class="big" id="nx" style="flex:2">${E.i === 99 ? 'ส่งคำตอบ' : pick == null ? 'ข้ามไปก่อน' : 'ข้อต่อไป'}</button></div></div>
+  <div class="opts">${optsOf(q).map((o,i) => `<button class="opt ${pick === i ? 'pick' : ''}" data-i="${i}"><span class="k">${L[i]}</span><span class="t">${esc(o)}</span></button>`).join('')}</div></div>
+  <div class="dock"><div class="wrap"><button class="big ghost" id="prev" ${E.i === 0 ? 'disabled' : ''} style="flex:1">ก่อนหน้า</button><button class="big" id="nx" style="flex:2">${E.i === QS.length - 1 ? 'ส่งคำตอบ' : pick == null ? 'ข้ามไปก่อน' : 'ข้อต่อไป'}</button></div></div>
   <div class="modal" id="md"><div class="in"></div></div>`;
-  $('#close').onclick = () => location.hash = '#/';
+  $('#close').onclick = () => location.hash = H('');
   bindZoom(app);
   app.querySelectorAll('.opt').forEach(b => b.onclick = () => {
     const i = +b.dataset.i;
-    E.ans[q.n] = i; save('ip-exam', E);
+    E.ans[q.n] = i; save(K('ip-exam'), E);
     app.querySelectorAll('.opt').forEach(x => x.classList.toggle('pick', x === b));
-    $('#nx').textContent = E.i === 99 ? 'ส่งคำตอบ' : 'ข้อต่อไป';
-    $('.bar i').style.width = Object.keys(E.ans).length + '%';
+    $('#nx').textContent = E.i === QS.length - 1 ? 'ส่งคำตอบ' : 'ข้อต่อไป';
+    $('.bar i').style.width = Object.keys(E.ans).length/QS.length*100 + '%';
   });
-  $('#prev').onclick = () => { E.i--; save('ip-exam', E); showE(); };
-  $('#nx').onclick = () => { if(E.i === 99) return navOpen(true); E.i++; save('ip-exam', E); showE(); };
+  $('#prev').onclick = () => { E.i--; save(K('ip-exam'), E); showE(); };
+  $('#nx').onclick = () => { if(E.i === QS.length - 1) return navOpen(true); E.i++; save(K('ip-exam'), E); showE(); };
   $('#nav').onclick = () => navOpen(false);
   clearInterval(tick);
   tick = setInterval(() => {
@@ -271,13 +286,13 @@ function showE(){
   scrollTo(0, 0);
 }
 function navOpen(submitting){
-  const md = $('#md'), left = 100 - Object.keys(E.ans).length;
-  md.firstChild.innerHTML = `<h3>${submitting ? (left ? `ยังไม่ได้ตอบ ${left} ข้อ` : 'ตอบครบ 100 ข้อแล้ว') : `ตอบแล้ว ${100-left} จาก 100 ข้อ`}</h3>
+  const md = $('#md'), N = QS.length, left = N - Object.keys(E.ans).length;
+  md.firstChild.innerHTML = `<h3>${submitting ? (left ? `ยังไม่ได้ตอบ ${left} ข้อ` : `ตอบครบ ${N} ข้อแล้ว`) : `ตอบแล้ว ${N-left} จาก ${N} ข้อ`}</h3>
     <div class="grid">${QS.map((q, i) => `<button class="${E.ans[q.n] != null ? 'done' : ''} ${i === E.i ? 'cur' : ''}" data-i="${i}">${q.n}</button>`).join('')}</div>
     <div style="display:grid;gap:10px;margin-top:20px"><button class="big" id="sub">ส่งคำตอบและดูผล</button><button class="big ghost" id="cl">ทำต่อ</button></div>`;
   md.classList.add('on');
   md.onclick = e => { if(e.target === md) md.classList.remove('on'); };
-  md.querySelectorAll('.grid button').forEach(b => b.onclick = () => { E.i = +b.dataset.i; save('ip-exam', E); showE(); });
+  md.querySelectorAll('.grid button').forEach(b => b.onclick = () => { E.i = +b.dataset.i; save(K('ip-exam'), E); showE(); });
   $('#cl').onclick = () => md.classList.remove('on');
   $('#sub').onclick = () => { if(!left || confirm(`ยังเหลือ ${left} ข้อที่ไม่ได้ตอบ ส่งเลยไหม`)) submitExam(); };
 }
@@ -285,8 +300,8 @@ function submitExam(){
   clearInterval(tick);
   E.done = true; E.end = Date.now();
   QS.forEach(q => { if(E.ans[q.n] != null) record(q.n, E.ans[q.n] === q.a); });
-  save('ip-exam', E);
-  location.hash = '#/x/res';
+  save(K('ip-exam'), E);
+  location.hash = H('x/res');
 }
 function examResult(ex){
   E = ex;
@@ -294,11 +309,11 @@ function examResult(ex){
   const total = QS.filter(q => ok(q.n)).length;
   const per = {}; 'SMT'.split('').forEach(k => { const qs = QS.filter(q => q.s === k); per[k] = {r: qs.filter(q => ok(q.n)).length, t: qs.length}; });
   const secPass = 'SMT'.split('').every(k => per[k].r/per[k].t >= .3);
-  const pass = total >= 60 && secPass;
+  const pass = total/QS.length >= .6 && secPass;
   const mins = Math.round(((ex.end || Date.now()) - ex.start)/60000);
   const wrongNs = QS.filter(q => !ok(q.n)).map(q => q.n);
-  app.innerHTML = `<div class="wrap fade"><div class="score"><div class="big-n">${total}<small>/100</small></div>
-    <h2>${pass ? 'ผ่านเกณฑ์ ITPEC' : total >= 60 ? 'คะแนนรวมผ่าน แต่มีหมวดต่ำกว่า 30%' : 'ยังไม่ถึง 60%'}</h2><p>ใช้เวลา ${mins} นาที</p></div>
+  app.innerHTML = `<div class="wrap fade"><div class="score"><div class="big-n">${total}<small>/${QS.length}</small></div>
+    <h2>${pass ? 'ผ่านเกณฑ์ ITPEC' : total/QS.length >= .6 ? 'คะแนนรวมผ่าน แต่มีหมวดต่ำกว่า 30%' : 'ยังไม่ถึง 60%'}</h2><p>ใช้เวลา ${mins} นาที</p></div>
     <div class="card bars">${'SMT'.split('').map(k => { const p = per[k].r/per[k].t*100; return `<div><div class="lbl"><span>${SECT[k].name} <span style="color:var(--mute)">${SECT[k].th}</span></span><b>${per[k].r}/${per[k].t}</b></div><div class="track"><i style="background:var(--${k})" data-w="${p}"></i><span class="mark" style="left:30%"></span></div></div>`; }).join('')}</div>
     <h2 class="sec">${wrongNs.length ? `ข้อที่พลาด ${wrongNs.length} ข้อ` : 'ไม่มีข้อที่พลาด'}</h2>
     ${resultList(wrongNs, () => false)}
@@ -306,8 +321,8 @@ function examResult(ex){
   requestAnimationFrame(() => setTimeout(() => app.querySelectorAll('.track i').forEach(i => i.style.width = i.dataset.w + '%'), 60));
   const bind = () => {
     bindList(n => ex.ans[n] == null ? null : ex.ans[n]);
-    $('#home').onclick = () => location.hash = '#/';
-    $('#again').onclick = () => { save('ip-exam', null); location.hash = '#/x'; };
+    $('#home').onclick = () => location.hash = H('');
+    $('#again').onclick = () => { save(K('ip-exam'), null); location.hash = H('x'); };
     app.querySelectorAll('.track i').forEach(i => i.style.width = i.dataset.w + '%');
   };
   bindAfterRestore = bind; bind();
@@ -315,21 +330,33 @@ function examResult(ex){
 }
 
 function emptyView(h, p){
-  app.innerHTML = `<div class="wrap fade"><div class="empty"><h2>${h}</h2><p>${p}</p><button class="big ghost" style="margin-top:28px" onclick="location.hash='#/'">กลับหน้าแรก</button></div></div>`;
+  setTimeout(() => { const b = $('#eh'); if(b) b.onclick = () => location.hash = H(''); });
+  app.innerHTML = `<div class="wrap fade"><div class="empty"><h2>${h}</h2><p>${p}</p><button class="big ghost" style="margin-top:28px" id="eh">กลับหน้าแรก</button></div></div>`;
 }
 
 /* ---------- router ---------- */
 function route(){
   clearInterval(tick);
   const h = location.hash.replace(/^#\/?/, '').split('/');
+  if(SETS[h[0]] && h[0] !== 'a'){ useSet(h.shift()); } else useSet('a');
+  lang = load('ip-lang', 'th');
   if(h[0] === 'p' && h[1]) return practice(h[1]);
   if(h[0] === 'x'){
-    if(h[1] === 'res'){ const ex = load('ip-exam', null); return ex && ex.done ? examResult(ex) : exam(); }
+    if(h[1] === 'res'){ const ex = load(K('ip-exam'), null); return ex && ex.done ? examResult(ex) : exam(); }
     return exam();
   }
   home(); scrollTo(0, 0);
 }
 addEventListener('hashchange', route);
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-lang]'); if(!b) return;
+  lang = lang === 'en' ? 'th' : 'en'; save('ip-lang', lang);
+  const n = +(app.querySelector('.qno').textContent.replace(/\D/g, '')), q = byN[n];
+  app.querySelector('.stem').innerHTML = stemHTML(q); bindZoom(app);
+  app.querySelectorAll('.opt .t').forEach((t, i) => t.textContent = optsOf(q)[i]);
+  b.textContent = lang === 'en' ? 'ไทย' : 'EN';
+  const v = app.querySelector('.verdict p'); if(v) v.textContent = `คำตอบคือ ${L[q.a]}) ${optsOf(q)[q.a]}`;
+});
 addEventListener('keydown', e => {
   if(e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase(), idx = '1234'.indexOf(k) >= 0 ? '1234'.indexOf(k) : 'abcd'.indexOf(k);
